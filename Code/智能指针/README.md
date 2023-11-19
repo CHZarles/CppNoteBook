@@ -1,6 +1,6 @@
 # 
 
-> ## :a:提要
+> ## 🅰️提要
 >
 > **资料出处 :**
 >
@@ -407,7 +407,7 @@ private:
     std::shared_ptr<A> a_;
 
 public:
-    std::shared_ptr<A>& a): a_(a) {}
+    D(std::shared_ptr<A>& a): a_(a) {}
 };
 
 class A
