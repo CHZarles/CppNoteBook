@@ -16,7 +16,7 @@
 
 ## 🚦 多线程
 
-- [x] [死锁问题](./articals/deadlock/deadlock.md)
+- [x] [死锁问题](./articals/deadlock/README.md)
 
 ## 🗼 框架
 
