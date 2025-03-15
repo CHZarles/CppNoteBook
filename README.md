@@ -20,14 +20,16 @@
 
 - [x] [死锁问题](./articals/deadlock/README.md)
 - [x] [线程安全vector](./articals/thread_safe_vec/README.md)
-- [x] [TBB 系列](./articals/tbb/README.md)
+- [ ] [TBB 系列](./articals/tbb/README.md) (ING)
 
 ## 🗼 框架
 
 ## 🧰 工具
 
-## other
+- [ ] [CMake]()
 
-- [] [move semantics]
-- [] [Copy/move elision](./articals/copy_move_elision/README.md)
-- [] [Cpp 17 standard feature](./articals/cpp_17_standard/README.md)
+## 🔎 杂谈
+
+- [x] [Cpp 17 standard feature](./articals/cpp_17_standard/README.md)
+- [ ] [move semantics]
+- [ ] [Copy/move elision](./articals/copy_move_elision/README.md)
