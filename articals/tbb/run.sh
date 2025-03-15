@@ -6,7 +6,7 @@ cmake --build build
 
 
 # List of executables
-executables=( "parallel_invoke" "parallel_for")
+executables=( "parallel_invoke" "parallel_for" "parallel_reduce" "parallel_scan")
 #"basic"
 # Run each executable
 for exe in "${executables[@]}"; do

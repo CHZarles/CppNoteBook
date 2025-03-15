@@ -20,7 +20,7 @@
 
 - [x] [死锁问题](./articals/deadlock/README.md)
 - [x] [线程安全vector](./articals/thread_safe_vec/README.md)
-- [x] [TBB 系列]
+- [x] [TBB 系列](./articals/tbb/README.md)
 
 ## 🗼 框架
 

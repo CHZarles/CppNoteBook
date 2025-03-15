@@ -7,7 +7,7 @@ project(cpptest LANGUAGES CXX)
 find_package(TBB REQUIRED)
 find_package(Threads REQUIRED)
 
-foreach(target IN ITEMS basic parallel_invoke parallel_for)
+foreach(target IN ITEMS tb_run parallel_scan parallel_reduce parallel_invoke parallel_for)
     add_executable(${target} ${target}.cpp)
     target_link_libraries(${target} PUBLIC TBB::tbb)
     target_link_libraries(${target} PUBLIC Threads::Threads)
