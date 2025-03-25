@@ -127,6 +127,7 @@ void parallel_for_each(Iterator first, Iterator last, const Body &body);
 ## 缩并 (reduce)
 
 在并行计算中，reduce（归约）是一种常见的操作，用于将多个值组合成一个单一的值。这个过程通常涉及对一组数据应用一个二元操作（如加法、乘法、最大值等），并将结果逐步合并。
+![alt text](images/reduce.png)
 
 例如，在并行计算中，可以将一个大数组分成多个子数组，并行地对每个子数组进行归约操作，然后再将这些中间结果合并成最终结果。
 
@@ -181,6 +182,10 @@ reduce可以用分治实现，也可以用tbb的reduce接口实现, 用并行实
 这种确定性对于某些应用场景非常重要，例如需要重复运行并比较结果的科学计算、金融计算等。通过使用 `parallel_deterministic_reduce`，可以确保每次运行的结果都是一致的，从而避免由于并行执行顺序不同而导致的结果不一致问题。
 
 ## 扫描 (scan)
+
+扫描和缩并差不多，只不过他会把求和的中间结果存到数组里去
+![alt text](images/scan.png)
+
 
 在并行计算中，`scan`（也称为前缀和或前缀扫描）是一种常见的并行算法，用于计算一个数组的前缀和。具体来说，`scan` 操作会生成一个新的数组，其中每个元素是原数组中从起始位置到当前元素的累加和。
 
@@ -315,7 +320,7 @@ int main() {
 
 另外可以指定区间的粒度，将tbb::parallel_for(tbb::blocked_range<size_t>(0, n)改为tbb::parallel_for(tbb::blocked_range<size_t>(0, n, 16)，执行的结果如下： thread 0 size 16 thread 1 size 16 创建了2个线程2个任务，每个任务包含16个元素。
 
-（2）、简单划分策略simple_partitioner
+（2）简单划分策略simple_partitioner
 例子如下：
 
 ```c++
