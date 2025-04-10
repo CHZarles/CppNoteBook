@@ -20,7 +20,7 @@
 
 - [x] [死锁问题](./articals/deadlock/README.md)
 - [x] [线程安全vector](./articals/thread_safe_vec/README.md)
-- [ ] [TBB 系列](./articals/tbb/README.md) (ING)
+- [x] [TBB 系列](./articals/tbb/README.md)
 
 ## 🗼 框架
 
@@ -35,3 +35,7 @@
 - [x] [Cpp 17 standard feature](./articals/cpp_17_standard/README.md)
 - [ ] [move semantics]
 - [ ] [Copy/move elision](./articals/copy_move_elision/README.md)
+- [ ] [访存优化]
+- [x] [编译器优化系列](./articals/compile_optimization)
+- [ ] [SMID加速指令](./https://www.bilibili.com/video/BV1GN411B7b2?vd_source=27d3b33a76014ebb5a906ad40fa382de&spm_id_from=333.788.videopod.sections)
+- [x] [CppQuestion](./)
