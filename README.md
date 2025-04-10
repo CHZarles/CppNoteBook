@@ -38,4 +38,4 @@
 - [ ] [访存优化]
 - [x] [编译器优化系列](./articals/compile_optimization)
 - [ ] [SMID加速指令](./https://www.bilibili.com/video/BV1GN411B7b2?vd_source=27d3b33a76014ebb5a906ad40fa382de&spm_id_from=333.788.videopod.sections)
-- [x] [CppQuestion](./)
+- [x] [CppQuestion](./articals/CppQuestion/README.md)
