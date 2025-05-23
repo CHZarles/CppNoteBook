@@ -567,7 +567,7 @@ addrlen: 第二个结构体参数 servaddr 变量的字节长度
 
 关系图如下所示：
 
-[img](./resource/img410.png)
+![img](./resource/img410.png)
 
 - 客户端只能等到服务端调用 listen 函数后才才能调用 connect 函数
 
@@ -587,7 +587,7 @@ addrlen: 第二个结构体参数 servaddr 变量的字节长度
 
 最简单的方式就是插入循环反复调用 accept 函数，如图:
 
-[img](./resource/img411.png)
+![img](./resource/img411.png)
 
 可以看出，调用 accept 函数后，紧接着调用 I/O 相关的 read write 函数，然后调用 close 函数。这并非针对服务器套接字，而是针对 accept 函数调用时创建的套接字。
 
@@ -719,7 +719,7 @@ TCP套接字的数据收发无边界。服务器即使调用一次write函数传
 
 如图所示，write 函数调用瞬间，数据将移至输出缓冲；read 函数调用瞬间，从输入缓冲读取数据。
 
-[img](./resource/img520.png)
+![img](./resource/img520.png)
 
 I/O 缓冲特点如下:
 
@@ -754,7 +754,7 @@ TCP 套接字与对方套接字建立连接的过程。连接过程中，套接�
 TCP 在实际通信中也会经过三次对话过程，因此，该过程又被称为 Three-way handshaking（三次握手）。
 接下来给出连接过程中实际交换的信息方式：
 
-[img](./resource/img530.png)
+![img](./resource/img530.png)
 
 套接字是全双工方式工作的。也就是说，它可以双向传递数据。因此，收发数据前要做一些准备。
 
@@ -782,7 +782,7 @@ TCP 在实际通信中也会经过三次对话过程，因此，该过程又被�
 
 通过第一步三次握手过程完成了数据交换准备，下面就开始正式收发数据，其默认方式如图所示：
 
-[img](./resource/img540.png)
+![img](./resource/img540.png)
 
 图上给出了主机 A 分成 2 个数据包向主机 B 传输 200 字节的过程。
 
