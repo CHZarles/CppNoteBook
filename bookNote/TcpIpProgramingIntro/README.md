@@ -42,13 +42,13 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 下面会演示一个最简单的server和client，代码里很多细节书中会逐渐讲到，这里只需要
 知道整个流程步骤。
 
-- 服务端 \*
+- 服务端
 
 服务器端（server）是能够受理连接请求的程序。下面构建服务端以验证之前提到的函数调用过程，该服务器端收到连接请求后向请求者返回Hello World!答复。除各种函数的调用顺序外，我们还未涉及任何实际编程。因此，阅读代码时请重点关注套接字相关的函数调用过程，不必理解全过程。
 
 服务器端代码请参见：[hello_server.c](./ch01/hello_server.c)
 
-- 客户端 \*
+- 客户端
 
 客户端程序只有调用 socket 函数创建套接字 和 调用 connect 函数向服务端发送连接请求这两个步骤，下面给出客户端，需要查看以下两方面的内容：
 
@@ -456,8 +456,8 @@ IP 层只关注一个数据包（数据传输基本单位）的传输过程。
 
 顺序步骤
 
-- `socket()` 创建套接字I
-- `bind()` 分配套接字
+- `socket()` 创建套接字
+- `bind()` 分配套接字 ip
 - `listen()` 等待请求连接
 - `accept()` 允许连接
 - `read()/write()` 数据交换
@@ -826,3 +826,520 @@ SEQ 和 ACK 的含义与之前讲解的内容一致，省略。
 图中，主机 A 传递了两次 ACK 5001，也许这里会有困惑。
 
 其实，第二次 FIN 数据包中的 ACK 5001 只是因为接收了 ACK 消息后未接收到的数据重传的。
+
+# CH6 基于UDP的服务端/客户端
+
+TCP 是内容较多的一个协议，而本章中的 UDP 内容较少，但是也很重要。
+
+## 6.1 理解UDP
+
+通过寄信来说明 UDP 的工作原理，这是讲解 UDP 时使用的传统示例，它与 UDP 的特点完全相同。
+
+寄信前应先在信封上填好寄信人和收信人的地址，之后贴上邮票放进邮筒即可。
+
+当然，信件的特点使我们无法确认信件是否被收到。邮寄过程中也可能发生信件丢失的情况。
+
+也就是说，信件是一种不可靠的传输方式，UDP 也是一种不可靠的数据传输方式。
+
+因为 UDP 没有 TCP 那么复杂，所以编程难度比较小，性能也比 TCP 高。
+
+在更重视性能的情况下可以选择 UDP 的传输方式。
+
+TCP 与 UDP 的区别很大一部分来源于流控制。也就是说 TCP 的生命在于流控制。
+
+### 6.1.2 UDP 工作原理
+
+IP 的作用就是让离开主机 B 的 UDP 数据包准确传递到主机 A 。
+
+但是把 UDP 数据包最终交给主机 A 的某一 UDP 套接字的过程是由 UDP 完成的。
+
+UDP 的最重要的作用就是根据端口号将传到主机的数据包交付给最终的 UDP 套接字。
+
+### 6.1.3 UDP 的高效使用
+
+UDP 也具有一定的可靠性。对于通过网络实时传递的视频或者音频时情况有所不同。
+
+对于多媒体数据而言，丢失一部分数据也没有太大问题，这只是会暂时引起画面抖动，或者出现细微的杂音。
+
+但是要提供实时服务，速度就成为了一个很重要的因素。
+
+因此流控制就显得有一点多余，这时就要考虑使用 UDP 。TCP 比 UDP 慢的原因主要有以下两点：
+
+- 收发数据前后进行的连接设置及清除过程。
+- 收发过程中为保证可靠性而添加的流控制。
+
+如果收发的数据量小但是需要频繁连接时，UDP 比 TCP 更高效。
+
+## 6.2 实现基于 UDP 的服务端/客户端
+
+### 6.2.1 UDP中的服务段和客户端没有连接
+
+UDP套接字的交互 中只有创建套接字和数据交换的过程。
+
+### 6.2.2 UDP 服务器和客户端均只需一个套接字
+
+TCP 中，套接字之间应该是一对一的关系。
+
+在 UDP 中，不管是服务器端还是客户端都只需要 1 个套接字。
+
+只需要一个 UDP 套接字就可以向任意主机传输数据，如图所示：
+
+![img](./resource/img620.png)
+
+> 图中展示了 1 个 UDP 套接字与 2 个不同主机交换数据的过程。也就是说，只需 1 个 UDP 套接字就能和多台主机进行通信。
+
+### 6.2.3 基于UDP的数据I/O函数
+
+因为 UDP 套接字不会保持连接状态（UDP 套接字只有简单的邮筒功能），因此每次传输数据时都需要添加目标的地址信息。
+
+这相当于寄信前在信件中填写地址。接下来是 UDP 的相关函数：
+
+```c
+#include <sys/socket.h>
+ssize_t sendto(int sock, void *buff, size_t nbytes, int flags, struct sockaddr *to,
+                socklen_t addrlen);
+
+/*
+成功时返回发送的字节数，失败时返回 -1
+sock: 用于传输数据的 UDP 套接字
+buff: 保存待传输数据的缓冲地址值
+nbytes: 待传输的数据长度，以字节为单位
+flags: 可选项参数，若没有则传递 0
+to: 存有目标地址的 sockaddr 结构体变量的地址值
+addrlen: 传递给参数 to 的地址值结构体变量长度
+
+*/
+
+ssize_t recvfrom(int sock, void *buff, size_t nbytes, int flags,
+                 struct sockaddr *from, socklen_t *addrlen);
+
+/*
+成功时返回接收的字节数，失败时返回 -1
+sock: 用于传输数据的 UDP 套接字
+buff: 保存待传输数据的缓冲地址值
+
+nbytes: 待传输的数据长度，以字节为单位
+flags: 可选项参数，若没有则传递 0
+from: 存有发送端地址信息的 sockaddr 结构体变量的地址值
+addrlen: 保存参数 from 的结构体变量长度的变量地址值。
+*/
+```
+
+### 6.2.4 基于 UDP 的回声服务器端/客户端
+
+下面是实现的基于 UDP 的回声服务器的服务器端和客户端：
+
+代码：
+
+[uecho_client.c](./ch06/uecho_server.c)
+[uecho_server.c](./ch06/uecho_client.c)
+
+### 6.2.5 UDP 客户端 的 套接字的 地址分配
+
+上面的 UDP 客户端可以发现，UDP 客户端缺少了把IP和端口分配给套接字的过程。
+
+在 TCP 客户端调用 connect 函数自动完成此过程，而 UDP 中连能承担相同功能的函数调用语句都没有。
+
+UDP 程序中，调用 sendto 函数传输数据前应该完成对套接字的地址分配工作，因此调用 bind 函数。bind 函数不区分 TCP 和 UDP。
+
+另外，如果调用 sendto 函数尚未分配地址信息，则在首次调用 sendto 函数时给相应套接字自动分配 IP 和端口( IP 用主机IP，端口号用未选用的任意端口号 )。
+
+而且此时分配的地址一直保留到程序结束为止，因此也可以用来和其他 UDP 套接字进行数据交换。
+
+## 6.3 UDP的数据传输特性和调用 connect 函数
+
+### 6.3.1 存在数据边界的 UDP 套接字
+
+前面说得 TCP 数据传输中不存在数据边界，这表示「数据传输过程中调用 I/O 函数的次数不具有任何意义」
+
+相反，UDP 是具有数据边界，传输中调用 I/O 函数的次数非常重要。
+
+此，输入函数的调用次数和输出函数的调用次数应该完全一致，这样才能保证接收全部已经发送的数据。
+
+例如，调用 3 次输出函数发送的数据必须通过调用 3 次输入函数才能接收完。
+
+可以通过下面的例子验证：
+
+[bound_host1.c](./ch06/bound_host1.c)
+[bound_host2.c](./ch06/bound_host2.c)
+
+host1 是服务端，host2 是客户端，host2 一次性把数据发给服务端后，结束程序。但是因为服务端每隔五秒才接收一次，所以服务端每隔五秒接收一次消息。
+
+### 6.3.2 已连接（connect）UDP 套接字与未连接（unconnected）UDP 套接字
+
+TCP 套接字中需注册待传传输数据的目标IP和端口号，而在 UDP 中无需注册。因此通过 sendto 函数传输数据的过程大概可以分为以下 3 个阶段：
+
+第 1 阶段：向 UDP 套接字注册目标 IP 和端口号
+第 2 阶段：传输数据
+第 3 阶段：删除 UDP 套接字中注册的目标地址信息。
+
+每次调用 sendto 函数时重复上述过程。每次都变更目标地址，因此可以重复利用同一 UDP 套接字向不同目标传递数据。
+
+这种未注册目标地址信息的套接字称为未连接套接字，反之，注册了目标地址的套接字称为连接 connected 套接字。
+
+显然，UDP 套接字默认属于未连接套接字。当一台主机向另一台主机传输很多信息时，
+
+上述的三个阶段中，第一个阶段和第三个阶段占整个通信过程中近三分之一的时间，缩短这部分的时间将会大大提高整体性能。
+
+### 6.3.3 创建已连接 UDP 套接字
+
+创建已连接 UDP 套接字过程格外简单，只需针对 UDP 套接字调用 connect 函数。
+
+```c
+sock = socket(PF_INET, SOCK_DGRAM, 0);
+memset(&adr, 0, sizeof(adr));
+adr.sin_family = AF_INET;
+adr.sin_addr.s_addr = inet_addr(argv[1]);
+adr.sin_port = htons(atoi(argv[2]));
+connect(sock, (struct sockaddr *)&adr, sizeof(adr));
+```
+
+之后就与 TCP 套接字一致，每次调用 sendto 函数时只需传递信息数据。
+
+因为已经指定了收发对象，所以不仅可以使用 sendto、recvfrom 函数，还可以使用 write、read 函数进行通信。
+
+下面是一个使用 已连接UDP 套接字的程序
+
+[uecho_con_client.c](./ch06/uecho_con_client.c)
+
+# CH7 断开套接字连接
+
+本章讨论如何合理地断开套接字的连接，
+
+之前用的方法不够优雅是因为，
+
+我们是调用 close 函数或 closesocket 函数单方面断开连接的。
+
+## 7.1 基于 TCP 的半关闭
+
+TCP 的断开连接过程比建立连接更重要，因为连接过程中一般不会出现大问题，但是断开过程可能发生预想不到的情况。
+
+因此应该准确掌控。所以要掌握半关闭（Half-close），才能明确断开过程。
+
+### 7.1.1 单方面断开连接带来的问题
+
+Linux 和 Windows 的 closesocket 函数意味着完全断开连接。完全断开不仅无法传输数据，
+而且也不能接收数据。
+
+因此在某些情况下，通信一方单方面的断开套接字连接，显得不太优雅。如图所示：
+![img710](./resource/img710.png)
+
+图中描述的是 2 台主机正在进行双向通信，主机 A 发送完最后的数据后，调用 close 函数断开了最后的连接，
+
+之后主机 A 无法再接受主机 B 传输的数据。
+
+实际上，是完全无法调用与接受数据相关的函数。最终，由主机 B 传输的、主机 A 必须要接受的数据也销毁了。
+
+为了解决这类问题，「只关闭一部分数据交换中使用的流」的方法应运而生。
+
+断开一部分连接是指，可以传输数据但是无法接收，或可以接受数据但无法传输。顾名思义就是只关闭流的一半。
+
+### 7.1.2 套接字和流（stream）
+
+两台主机通过套接字建立连接后进入可交换数据的状态，又称「流形成的状态」。
+
+一旦两台主机之间建立了套接字连接，每个主机就会拥有单独的输入流和输出流。
+
+当然，其中一个主机的输入流与另一个主机的输出流相连，而输出流则与另一个主机的输入流相连。
+
+另外，本章讨论的「优雅的断开连接方式」只断开其中 1 个流，而非同时断开两个流。
+
+![img720](./resource/img720.png)
+
+### 7.1.3 断开单向流的 shutdown 函数
+
+```c
+#include <sys/socket.h>
+int shutdown(int sock, int howto);
+/*
+成功时返回 0 ，失败时返回 -1
+sock: 需要断开套接字文件描述符
+howto: 传递断开方式信息
+*/
+```
+
+调用上述函数时，第二个参数决定断开连接的方式，其值如下所示：
+
+- SHUT_RD : 断开输入流
+  > 中断输入流，套接字无法接收数据。即使输入缓冲收到数据也会抹去，而且无法调用相关函数。
+- SHUT_WR : 断开输出流
+  > 中断输出流，也就无法传输数据。若如果输出缓冲中还有未传输的数据，则将传递给目标主机。
+- SHUT_RDWR : 同时断开 I/O 流
+  > 同时中断 I/O 流。这相当于分 2 次调用 shutdown ，其中一次以SHUT_RD为参数，另一次以SHUT_WR为参数。
+
+### 7.1.4 为何要半关闭
+
+略
+
+### 7.1.5 基于半关闭的文件传输程序
+
+上述文件传输服务器端和客户端的数据流可以整理如图：
+
+![img730](./resource/img730.png)
+
+下面的代码为编程简便，省略了大量错误处理代码。
+
+[file_client.c](./ch07/file_client.c)
+[file_server.c](./ch07/file_server.c)
+
+客户端接受完成后，服务器会接收到来自客户端的感谢信息。
+
+# CH8 域名及网络地址
+
+## 8.1 域名系统
+
+DNS 是对IP地址和域名进行相互转换的系统，其核心是 DNS 服务器
+
+### 8.1.1 什么是域名
+
+域名就是我们常常在地址栏里面输入的地址，将比较难记忆的IP地址变成人类容易理解的信息。
+
+### 8.1.2 DNS 服务器
+
+相当于一个字典，可以查询出某一个域名对应的IP地址
+
+## 8.2 IP地址和域名之间的转换
+
+### 8.2.1 程序中有必要使用域名吗？
+
+略
+
+### 8.2.2 利用域名获取IP地址
+
+使用以下函数可以通过传递字符串格式的域名获取IP地址
+
+```c
+#include <netdb.h>
+struct hostent *gethostbyname(const char *hostname);
+/*
+成功时返回 hostent 结构体地址，失败时返回 NULL 指针
+*/
+```
+
+这个函数使用方便，只要传递字符串，就可以返回域名对应的IP地址。
+
+只是返回时，地址信息装入 hostent 结构体。
+
+此结构体的定义如下：
+
+```c
+struct hostent
+{
+    char *h_name;       /* Official name of host.  */
+    char **h_aliases;   /* Alias list.  */
+    int h_addrtype;     /* Host address type.  */
+    int h_length;       /* Length of address.  */
+    char **h_addr_list; /* List of addresses from name server.  */
+};
+```
+
+- h_name：
+  - 该变量中存有官方域名（Official domain name）。
+  - 官方域名代表某一主页，但实际上，一些著名公司的域名并没有用官方域名注册。
+- h_aliases：
+  - 可以通过多个域名访问同一主页。同一IP可以绑定多个域名，因此，除官方域名外还可以指定其他域名。
+- h_addrtype：
+  - gethostbyname 函数不仅支持 IPV4 还支持 IPV6 。
+  - 因此可以通过此变量获取保存在 h_addr_list 的IP地址族信息。
+  - 若是 IPV4 ，则此变量中存有 AF_INET。
+- h_length：
+  - 保存IP地址长度。若是 IPV4 地址，因为是 4 个字节，则保存4；
+  - IPV6 时，因为是 16 个字节，故保存 16
+- h_addr_list：
+  - 此变量以整数形式保存域名相对应的IP地址。
+  - 另外，用户比较多的网站有可能分配多个IP地址给同一个域名，利用多个服务器做负载均衡
+  - 这是个指针数组，数组元素是指向 struct in_addr 类型的char\*指针
+
+下面的代码通过一个例子来演示 gethostbyname 的应用，并说明 hostent 结构体变量特性。
+
+- [gethostbyname.c](./ch08/gethostbyname.c)
+
+仔细阅读这一段代码：
+
+```c
+inet_ntoa(*(struct in_addr *)host->h_addr_list[i])
+```
+
+若只看 hostent 的定义，结构体成员 h_addr_list 指向字符串指针数组（由多个字符串地址构成的数组）。
+但是字符串指针数组保存的元素实际指向的是 in_addr 结构体变量中地址值而非字符串，
+也就是说(struct in_addr *)host->h_addr_list[i]其实是一个指针，然后用*符号取具体的值。
+
+### 8.2.3 利用ip地址获取域名
+
+请看下面的函数定义：
+
+```c
+#include <netdb.h>
+struct hostent *gethostbyaddr(const char *addr, socklen_t len, int family);
+/*
+成功时返回 hostent 结构体变量地址值，失败时返回 NULL 指针
+addr: 含有IP地址信息的 in_addr 结构体指针。为了同时传递 IPV4 地址之外的全部信息，该变量的类型声明为 char 指针
+len: 向第一个参数传递的地址信息的字节数，IPV4时为 4 ，IPV6 时为16.
+family: 传递地址族信息，ipv4 是 AF_INET ，IPV6是 AF_INET6
+*/
+```
+
+示例代码
+
+- [gethostbyaddr.c](./ch08/gethostbyaddr.c)
+
+# CH9 套接字的多种可选项
+
+## 9.1 套接字的可选项和I/O缓冲大小
+
+### 9.1.1 套接字多种可选项
+
+我们之前写得程序都是创建好套接字之后直接使用的，此时通过默认的套接字特性进行数据通信，
+这里列出了一些套接字可选项。
+
+| 协议层      | 选项名            | 读取 | 设置 |
+| ----------- | ----------------- | ---- | ---- |
+| SOL_SOCKET  | SO_SNDBUF         | O    | O    |
+| SOL_SOCKET  | SO_RCVBUF         | O    | O    |
+| SOL_SOCKET  | SO_REUSEADDR      | O    | O    |
+| SOL_SOCKET  | SO_KEEPALIVE      | O    | O    |
+| SOL_SOCKET  | SO_BROADCAST      | O    | O    |
+| SOL_SOCKET  | SO_DONTROUTE      | O    | O    |
+| SOL_SOCKET  | SO_OOBINLINE      | O    | O    |
+| SOL_SOCKET  | SO_ERROR          | O    | X    |
+| SOL_SOCKET  | SO_TYPE           | O    | X    |
+| IPPROTO_IP  | IP_TOS            | O    | O    |
+| IPPROTO_IP  | IP_TTL            | O    | O    |
+| IPPROTO_IP  | IP_MULTICAST_TTL  | O    | O    |
+| IPPROTO_IP  | IP_MULTICAST_LOOP | O    | O    |
+| IPPROTO_IP  | IP_MULTICAST_IF   | O    | O    |
+| IPPROTO_TCP | TCP_KEEPALIVE     | O    | O    |
+| IPPROTO_TCP | TCP_NODELAY       | O    | O    |
+| IPPROTO_TCP | TCP_MAXSEG        | O    | O    |
+
+> 从表中可以看出，套接字可选项是分层的。
+> IPPROTO_IP 可选项是IP协议相关事项
+> IPPROTO_TCP 层可选项是 TCP 协议的相关事项
+> SOL_SOCKET 层是套接字的通用可选项。
+
+### 9.1.2 `getsockopt` and `setsockopt`
+
+可选项的读取和设置通过以下两个函数来完成
+
+```c
+#include <sys/socket.h>
+
+int getsockopt(int sock, int level, int optname, coinst void *optval, socklen_t optlen);
+/*
+成功时返回 0 ，失败时返回 -1
+sock: 用于查看选项套接字文件描述符
+level: 要查看的可选项协议层
+
+optname: 要查看的可选项名
+optval: 保存查看结果的缓冲地址值
+optlen: 向第四个参数传递的缓冲大小。调用函数候，该变量中保存通过第四个参数返回的可选项信息的字节数。
+*/
+
+
+int setsockopt(int sock, int level, int optname, const void *optval, socklen_t optlen);
+/*
+成功时返回 0 ，失败时返回 -1
+sock: 用于更改选项套接字文件描述符
+level: 要更改的可选项协议层
+optname: 要更改的可选项名
+optval: 保存更改结果的缓冲地址值
+optlen: 向第四个参数传递的缓冲大小。调用函数后，该变量中保存通过第四个参数返回的可选项信息的字节数。
+*/
+```
+
+下面的代码可以看出`getsockopt` 的使用方法。下面示例用协议层为 `SOL_SOCKET` 、名为`SO_TYPE` 的可选项查看套接字类型（`TCP` 和 `UDP` ）。
+
+- [sock_type.c](./ch09/sock_type.c)
+
+### 9.1.3 `SO_SNDBUF` and `SO_RCVBUF`
+
+创建套接字的同时会生成 I/O 缓冲，SO_RECVBUF 是有关输入缓冲大小的选项
+SO_SNDBUF 是有关输出缓冲大小的选项。
+
+用这个两个选项可以读取和更改当前I/O大小
+
+相关例子：
+
+- [get_buf.c](./ch09/get_buf.c)
+
+## 9.2 SO_REUSEADDR
+
+### 9.2.1 发生地址分配错误（Binding Error）
+
+在学习 SO_REUSEADDR 可选项之前，应该好好理解 Time-wait 状态。看以下代码的示例：
+
+-[reuseadr_server.c](./ch09/reuseadr_server.c)
+
+这是一个回声服务器的服务端代码，可以配合第四章的 echo_client.c 使用，在这个代码中，客户端通知服务器终止程序。在客户端控制台输入 Q 可以结束程序，向服务器发送 FIN 消息并经过四次握手过程。当然，输入 CTRL+C 也会向服务器传递 FIN 信息。强制终止程序时，由操作系统关闭文件套接字，此过程相当于调用 close 函数，也会向服务器发送 FIN 消息。
+
+这样看不到是什么特殊现象，考虑以下情况：
+
+服务器端和客户端都已经建立连接的状态下，向服务器控制台输入 CTRL+C ，强制关闭服务端
+
+如果用这种方式终止程序，如果用同一端口号再次运行服务端，就会输出「bind() error」消息，并且无法再次运行。但是在这种情况下，再过大约 3 分钟就可以重新运行服务端。
+
+### 9.2.2 Time-wait 状态
+
+观察以下过程：
+
+![img](./resource/img910.png)
+
+假设图中主机 A 是服务器，因为是主机 A 向 B 发送 FIN 消息，故可想象成服务器端在控制台中输入 CTRL+C 。但是问题是，套接字经过四次握手后并没有立即消除，而是要经过一段时间的 Time-wait 状态。当然，只有先断开连接的（先发送 FIN 消息的）主机才经过 Time-wait 状态。因此，若服务器端先断开连接，则无法立即重新运行。套接字处在 Time-wait 过程时，相应端口是正在使用的状态。因此，就像之前验证过的，bind 函数调用过程中会发生错误。
+
+实际上，不论是服务端还是客户端，都要经过一段时间的 Time-wait 过程。先断开连接的套接字必然会经过 Time-wait 过程，但是由于客户端套接字的端口是任意指定的，所以无需过多关注 Time-wait 状态。
+
+那到底为什么会有 Time-wait 状态呢，在图中假设，主机 A 向主机 B 传输 ACK 消息（SEQ 5001 , ACK 7502 ）后立刻消除套接字。但是最后这条 ACK 消息在传递过程中丢失，没有传递主机 B ，这时主机 B 就会试图重传。但是此时主机 A 已经是完全终止状态，因此主机 B 永远无法收到从主机 A 最后传来的 ACK 消息。基于这些问题的考虑，所以要设计 Time-wait 状态。
+
+### 9.2.3 地址再分配
+
+Time-wait 状态看似重要，但是不一定讨人喜欢。如果系统发生故障紧急停止，这时需要尽快重启服务起以提供服务，但因处于 Time-wait 状态而必须等待几分钟。因此，Time-wait 并非只有优点，这些情况下容易引发大问题。下图中展示了四次握手时不得不延长 Time-wait 过程的情况。
+
+![img](./resource/img920.png)
+
+从图上可以看出，在主机 A 四次握手的过程中，如果最后的数据丢失，则主机 B 会认为主机 A 未能收到自己发送的 FIN 信息，因此重传。这时，收到的 FIN 消息的主机 A 将重启 Time-wait 计时器。因此，如果网络状况不理想， Time-wait 将持续。
+
+解决方案就是在套接字的可选项中更改 SO_REUSEADDR 的状态。适当调整该参数，可将 Time-wait 状态下的套接字端口号重新分配给新的套接字。SO_REUSEADDR 的默认值为 0.这就意味着无法分配 Time-wait 状态下的套接字端口号。因此需要将这个值改成 1 。具体作法已在示例 reuseadr_eserver.c 给出，只需要把注释掉的东西解除注释即可。
+
+```c
+optlen = sizeof(option);
+option = TRUE;
+setsockopt(serv_sock, SOL_SOCKET, SO_REUSEADDR, (void *)&option, optlen);
+```
+
+## 9.3 `TCP_NODELAY`
+
+### 9.3.1 `Nagle` 算法
+
+为了防止因数据包过多而发生网络过载，Nagle 算法诞生了。
+
+它应用于 TCP 层。它是否使用会导致如图所示的差异：
+
+![img](./resource/img930.png)
+
+图中展示了通过 Nagle 算法发送字符串 Nagle 和未使用 Nagle 算法的差别。可以得到一个结论。
+
+只有接收到前一数据的 ACK 消息， Nagle 算法才发送下一数据。
+
+TCP 套接字默认使用 Nagle 算法交换数据，因此最大限度的进行缓冲，直到收到 ACK 。左图也就是说一共传递 4 个数据包以传输一个字符串。从右图可以看出，发送数据包一共使用了 10 个数据包。由此可知，不使用 Nagle 算法将对网络流量产生负面影响。即使只传输一个字节的数据，其头信息都可能是几十个字节。因此，为了提高网络传输效率，必须使用 Nagle 算法。
+
+Nagle 算法并不是什么情况下都适用，网络流量未受太大影响时，不使用 Nagle 算法要比使用它时传输速度快。最典型的就是「传输大文数据」。将文件数据传入输出缓冲不会花太多时间，因此，不使用 Nagle 算法，也会在装满输出缓冲时传输数据包。这不仅不会增加数据包的数量，反而在无需等待 ACK 的前提下连续传输，因此可以大大提高传输速度。
+
+所以，未准确判断数据性质时不应禁用 Nagle 算法。
+
+### 9.3.2 禁用 `Nagle` 算法
+
+禁用`Nagle` 算法应该使用:
+
+```c
+int opt_val = 1;
+setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (void *)&opt_val, sizeof(opt_val));
+```
+
+通过 TCP_NODELAY 的值来查看 `Nagle` 算法的设置状态。
+
+```c
+opt_len = sizeof(opt_val)
+getsockopt(sock, IPPROTO_TCP, TCO_NODELAY, (void *)&opt_val, &opt_len);
+```
+
+如果正在使用 `Nagle` 算法，那么 opt_val 的值是 0， 如果禁用则为 1
