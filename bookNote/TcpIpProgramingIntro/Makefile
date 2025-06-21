@@ -6,7 +6,7 @@ CPPFLAGS = -Wall -g
 INCLUDES = -Icommon
 
 # Directories
-SRC_DIRS = ch01 ch02 common ch03 ch04 ch05 ch06 ch07 ch08 ch09
+SRC_DIRS = ch01 ch02 common ch03 ch04 ch05 ch06 ch07 ch08 ch09 ch10 ch11 ch12 ch13 ch14
 BUILD_DIR = build
 BIN_DIR = bin
 
