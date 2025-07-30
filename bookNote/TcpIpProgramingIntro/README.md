@@ -1071,6 +1071,8 @@ howto: 传递断开方式信息
 
 略
 
+> 扩展阅读： [Linux-socket的close和shutdown区别及应用场景](https://www.google.com/search?q=shutdown%E5%92%8Cclose%E7%9A%84%E5%8C%BA%E5%88%AB&oq=&gs_lcrp=EgZjaHJvbWUqCQgBECMYJxjqAjIJCAAQIxgnGOoCMgkIARAjGCcY6gIyCQgCECMYJxjqAjIJCAMQIxgnGOoCMgkIBBAjGCcY6gIyCQgFECMYJxjqAjIJCAYQIxgnGOoCMgkIBxAjGCcY6gLSAQg5NThqMGoxNagCCLACAfEFKxWb_rc9SmzxBSsVm_63PUps&sourceid=chrome&ie=UTF-8)
+
 ### 7.1.5 基于半关闭的文件传输程序
 
 上述文件传输服务器端和客户端的数据流可以整理如图：
@@ -2268,7 +2270,41 @@ setsockopt(send_sock,SOL_SOCKET,SO_BROADCAST,(void*)&bcast,sizeof(bcast));
 
 ## 15.2 使用标准 I/O 函数
 
-略
+### 15.2.1 利用 fdopen 函数转换为 FILE 结构体指针
+
+函数原型
+
+```c++
+#include <stdio.h>
+FILE *fdopen(int fildes, const char *mode);
+/*
+成功时返回转换的 FILE 结构体指针，失败时返回 NULL
+fildes ： 需要转换的文件描述符
+mode ：将要创建的 FILE 结构体指针的模式信息
+*/
+
+```
+
+以下为示例：
+
+- [desto.c](./ch15/desto.c)
+
+### 15.2.2 利用 fileno 函数转换为文件描述符
+
+函数原型如下：
+
+```c++
+#include <stdio.h>
+int fileno(FILE *stream);
+
+/*
+成功时返回文件描述符，失败时返回 -1
+*/
+```
+
+示例：
+
+- [todes.c](./ch15/todes.c)
 
 ## 15.3 基于套接字的标准 I/O 函数使用
 
@@ -2278,3 +2314,302 @@ setsockopt(send_sock,SOL_SOCKET,SO_BROADCAST,(void*)&bcast,sizeof(bcast));
 
 - [echo_client.c](./ch15/echo_client.c)
 - [echo_stdserv.c](./ch15/echo_stdserv.c)
+
+# CH16 关于 I/O 分离的其它内容
+
+## 16.1 分离 I/O 流
+
+「分离 I/O 流」是一种常用表达。有 I/O 工具可区分二者，无论采用哪种方法，都可以认为是分离了 I/O 流。
+
+### 16.1.1 2 次 I/O 流分离
+
+之前有两种分离方法：
+
+- 第一种是第 10 章的「TCP I/O 过程」分离。通过调用 fork 函数复制出一个文件描述符，
+  以区分输入和输出中使用的文件描述符。
+  虽然文件描述符本身不会根据输入和输出进行区分，但我们分开了 2 个文件描述符的用途，
+  因此，这也属于「流」的分离。
+
+- 第二种分离是在第 15 章。
+  通过 2 次 fdopen 函数的调用，创建读模式 FILE 指针（FILE 结构体指针）和写模式 FILE 指针。
+  换言之，我们分离了输入工具和输出工具，因此也可视为「流」的分离。下面是分离的理由。
+
+### 16.1.2 分离「流」的好处
+
+首先是第 10 章「流」的分离目的：
+
+- 通过分开输入过程（代码）和输出过程降低实现难度
+- 与输入无关的输出操作可以提高速度
+
+下面是第 15 章「流」分离的目的：
+
+- 为了将 FILE 指针按读模式和写模式加以区分
+- 可以通过区分读写模式降低实现难度
+- 通过区分 I/O 缓冲提高缓冲性能
+
+### 16.1.3 「流」分离带来的 EOF 问题
+
+第 7 章介绍过 EOF 的传递方法和半关闭的必要性。有一个语句：
+
+```c
+shutdown(sock, SHUT_WR);
+```
+
+当时说过调用 shutdown 函数的基于半关闭的 EOF 传递方法。第十章的 [echo_mpclient.c](./ch10/echo_mpclient.c)
+添加了半关闭的相关代码。但是还没有讲采用 fdopen 怎么半关闭。那么是否通过 fclose 函数关闭流呢 ？
+
+下面是服务端和客户端：
+
+- [sep_clnt.c](./ch16/sep_clnt.c)
+- [sep_serv.c](./ch16/sep_serv.c)
+  > 但是上面的代码是有问题的。运行时，服务端最终没有收到客户端发送的消息
+  > 原因是服务端代码 `fclose(writefp)` 完全关闭了套接字，而不是半关闭。
+
+## 16.2 文件描述符的的复制和半关闭
+
+### 16.2.1 终止 流 时 无法半关闭的原因
+
+下面的图描述的是服务端代码中的两个FILE 指针、文件描述符和套接字中的关系
+
+![img](./resource/img1601.png)
+
+从图中可以看到，两个指针都是基于同一文件描述符创建的。
+
+因此，针对于任何一个 FILE 指针调用 fclose 函数都会关闭文件描述符，如图所示：
+
+![img](./resource/img1602.png)
+
+从图中看到，销毁套接字时再也无法进行数据交换。那如何进入可以进入但是无法输出的半关闭状态呢？如下图所示：
+
+![img](./resource/img1603.png)
+
+只需要创建 FILE 指针前先复制文件描述符即可。
+复制后另外创建一个文件描述符，然后利用各自的文件描述符生成读模式的 FILE 指针和写模式的 FILE 指针。
+这就为半关闭创造好了环境，因为套接字和文件描述符具有如下关系：
+
+> 销毁所有文件描述符候才能销毁套接字
+
+也就是说，针对写模式 FILE 指针调用 fclose 函数时，只能销毁与该 FILE 指针相关的文件描述符，无法销毁套接字，如下图：
+
+![img](./resource/img1604.png)
+
+那么调用 fclose 函数候还剩下 1 个文件描述符，因此没有销毁套接字。那此时的状态是否为半关闭状态？不是！只是准备好了进入半关闭状态，而不是已经进入了半关闭状态。仔细观察，还剩下一个文件描述符。而该文件描述符可以同时进行 I/O 。因此，不但没有发送 EOF ，而且仍然可以利用文件描述符进行输出。
+
+### 16.2.2 复制文件描述符
+
+与调用 fork 函数不同，调用 fork 函数将复制整个进程，此处讨论的是同一进程内完成对完成描述符的复制。如图：
+
+![img](./resource/img1605.png)
+
+复制完成后，两个文件描述符都可以访问文件，但是编号不同。
+
+### 16.2.3 dup 和 dup2
+
+下面给出两个函数原型：
+
+```c
+#include <unistd.h>
+int dup(int fildes);
+int dup2(int fildes, int fildes2);
+/*
+成功时返回复制的文件描述符，失败时返回 -1
+fildes : 需要复制的文件描述符
+
+fildes2 : 明确指定的文件描述符的整数值。
+*/
+```
+
+dup2 函数明确指定复制的文件描述符的整数值。
+向其传递大于 0 且小于进程能生成的最大文件描述符值时，该值将成为复制出的文件描述符值。下面是代码示例：
+
+```c
+#include <stdio.h>
+#include <unistd.h>
+
+int main(int argc, char *argv[])
+{
+
+    int cfd1, cfd2;
+    char str1[] = "Hi~ \n";
+
+    char str2[] = "It's nice day~ \n";
+
+
+    cfd1 = dup(1);        //复制文件描述符 1
+    cfd2 = dup2(cfd1, 7); //再次复制文件描述符,定为数值 7
+
+    printf("fd1=%d , fd2=%d \n", cfd1, cfd2);
+    write(cfd1, str1, sizeof(str1));
+    write(cfd2, str2, sizeof(str2));
+
+    close(cfd1);
+    close(cfd2); //终止复制的文件描述符，但是仍有一个文件描述符
+
+    write(1, str1, sizeof(str1));
+
+    close(1);
+    write(1, str2, sizeof(str2)); //无法完成输出
+    return 0;
+}
+
+
+```
+
+### 16.2.4 复制文件描述符后「流」的分离
+
+修改上面的 sep_serv.c , 得到下面代码。
+
+- [sep_serv2.c](./ch16/sep_serv2.c)
+
+这个代码可以配合[sep_clnt.c](./ch16/sep_clnt.c) 一起运行
+
+# CH17 优于 select 的 epoll
+
+> ref: [介绍网络IO演变的过程(阻塞IO、非阻塞IO、IO多路复用select&poll&epoll](https://www.bilibili.com/video/BV12U4y167sf/?vd_source=27d3b33a76014ebb5a906ad40fa382de)
+
+## 17.1 epoll 理解及应用
+
+select 复用方法由来已久，因此，利用该技术后，无论如何优化程序性能也无法同时介入上百个客户端。这种 select 方式并不适合以 web 服务器端开发为主流的现代开发环境，所以需要学习 Linux 环境下的 epoll.
+
+### 17.1.1 基于 select 的 I/O 复用技术速度慢的原因
+
+第 12 章实现了基于 select 的 I/O 复用技术服务端，其中有不合理的设计如下：
+
+- 调用 select 函数后常见的针对所有文件描述符的循环语句
+- 每次调用 select 函数时都需要向该函数传递监视对象信息
+
+上述两点可以从 [echo_selectserv.c](./ch12/echo_selectserv.c) 得到确认，调用 select 函数后，并不是把发生变化的文件描述符单独集中在一起，而是通过作为监视对象的 fd_set 变量的变化，找出发生变化的文件描述符（54,56行），因此无法避免针对所有监视对象的循环语句。而且，作为监视对象的 fd_set 会发生变化，所以调用 select 函数前应该复制并保存原有信息，并在每次调用 select 函数时传递新的监视对象信息。
+
+select 性能上最大的弱点是：每次传递监视对象信息，准确的说，select 是监视套接字变化的函数。而套接字是操作系统管理的，所以 select 函数要借助操作系统才能完成功能。select 函数的这一缺点可以通过如下方式弥补：
+
+### 17.1.2 select 的优点
+
+select 的兼容性比较高，这样就可以支持很多的操作系统，不受平台的限制，满足以下两个条件使可以使用 select 函数：
+
+- 服务器接入者少
+- 程序应该具有兼容性
+
+### 17.1.3 实现 epoll 时必要的函数和结构体
+
+能够克服 select 函数缺点的 epoll 函数具有以下优点，这些优点正好与之前的 select 函数缺点相反。
+
+- 无需编写以监视状态变化为目的的针对所有文件描述符的循环语句
+- 调用对应于 select 函数的 epoll_wait 函数时无需每次传递监视对象信息。
+
+下面是 epoll 函数的功能：
+
+- epoll_create：创建保存 epoll 文件描述符的空间
+- epoll_ctl：向空间注册并注销文件描述符
+- epoll_wait：与 select 函数类似，等待文件描述符发生变化
+
+select 函数中为了保存监视对象的文件描述符，直接声明了 fd_set 变量，但 epoll 方式下的操作系统负责保存监视对象文件描述符，
+因此需要向操作系统请求创建保存文件描述符的空间，此时用的函数就是 epoll_create 。
+
+```c
+struct epoll_event {
+    __uint32_t events;
+    epoll_data_t data;
+};
+
+typedef union epoll_data {
+    void *ptr;
+    int fd;
+    __uint32_t u32;
+    __uint64_t u64;
+} epoll_data_t;
+
+```
+
+声明足够大的 epoll_event 结构体数组候，传递给 epoll_wait 函数时，发生变化的文件描述符信息将被填入数组。
+因此，无需像 select 函数那样针对所有文件描述符进行循环。
+
+### 17.1.4 epoll_create
+
+下面是 epoll_create 函数的原型：
+
+```c
+#include <sys/epoll.h>
+int epoll_create(int size);
+/*
+成功时返回 epoll 的文件描述符，失败时返回 -1
+size：epoll 实例的大小
+*/
+```
+
+调用 epoll_create 函数时创建的文件描述符保存空间称为「epoll 例程」，但有些情况下名称不同，需要稍加注意。
+通过参数 size 传递的值决定 epoll 例程的大小，但该值只是向操作系统提出的建议。
+换言之，size 并不用来决定 epoll 的大小，而仅供操作系统参考。
+
+> Linux 2.6.8 之后的内核将完全忽略传入 epoll_create 函数的 size 函数，因此内核会根据情况调整 epoll 例程大小。但是本书程序并没有忽略 size
+
+### 17.1.5 epoll_ctl
+
+生成例程后，应在其内部注册监视对象文件描述符，此时使用 epoll_ctl 函数。
+
+```c
+#include <sys/epoll.h>
+int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
+
+/*
+成功时返回 0 ，失败时返回 -1
+epfd：用于注册监视对象的 epoll 例程的文件描述符
+op：用于指定监视对象的添加、删除或更改等操作
+fd：需要注册的监视对象文件描述符
+
+event：监视对象的事件类型
+*/
+```
+
+与其他 epoll 函数相比，该函数看起来有些复杂，但通过调用语句就很容易理解，假设按照如下形式调用 epoll_ctl 函数：
+
+```c
+epoll_ctl(A,EPOLL_CTL_ADD,B,C);
+```
+
+第二个参数 EPOLL_CTL_ADD 意味着「添加」，上述语句有如下意义：
+
+> epoll_ctl(A,EPOLL_CTL_DEL,B,NULL);
+
+再介绍一个调用语句。
+
+```c
+epoll_ctl(A,EPOLL_CTL_DEL,B,NULL);
+```
+
+上述语句中第二个参数意味着「删除」，有以下含义：
+
+> 从 epoll 例程 A 中删除文件描述符 B
+
+从上述示例中可以看出，从监视对象中删除时，不需要监视类型，因此向第四个参数可以传递为 NULL
+
+下面是第二个参数的含义：
+
+- EPOLL_CTL_ADD：将文件描述符注册到 epoll 例程
+- EPOLL_CTL_DEL：从 epoll 例程中删除文件描述符
+- EPOLL_CTL_MOD：更改注册的文件描述符的关注事件发生情况
+
+epoll_event 结构体用于保存事件的文件描述符结合。
+但也可以在 epoll 例程中注册文件描述符时，用于注册关注的事件。
+该函数中 epoll_event 结构体的定义并不显眼，因此通过调用语句说明该结构体在 epoll_ctl 函数中的应用。
+
+```c
+struct epoll_event event;
+...
+event.events=EPOLLIN;//发生需要读取数据的情况时
+event.data.fd=sockfd;
+epoll_ctl(epfd,EPOLL_CTL_ADD,sockfd,&event);
+...
+
+```
+
+上述代码将 epfd 注册到 epoll 例程 epfd 中，并在需要读取数据的情况下产生相应事件。接下来给出 epoll_event 的成员 events 中可以保存的常量及所指的事件类型。
+
+- EPOLLIN：需要读取数据的情况
+- EPOLLOUT：输出缓冲为空，可以立即发送数据的情况
+- EPOLLPRI：收到 OOB 数据的情况
+- EPOLLRDHUP：断开连接或半关闭的情况，这在边缘触发方式下非常有用
+- EPOLLERR：发生错误的情况
+- EPOLLET：以边缘触发的方式得到事件通知
+- EPOLLONESHOT：发生一次事件后，相应文件描述符不再收到事件通知。因此需要向 epoll_ctl 函数的第二个参数传递 EPOLL_CTL_MOD ，再次设置事件。
+
+可通过位或运算同时传递多个上述参数。

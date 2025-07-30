@@ -15,6 +15,8 @@
 ## 🌴 数据结构
 
 ## 🌐 网络编程
+- [x] [C++ web后台开发到底是啥](./articals/articals/CGI_program/NOTE.md)
+- [x] [CGI + ngnix 使用demo](./articals/CGI_program/README.md)
 - [x] [TCP IP 网络编程入门](./bookNote/TcpIpProgramingIntro/README.md)
 
 ## 🚦 多线程/并发编程
