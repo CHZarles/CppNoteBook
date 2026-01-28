@@ -16,7 +16,6 @@
 
 ## 🌐 网络编程
 - [x] [C++ web后台开发到底是啥](./articals/CGI_program/NOTE.md)
-- [x] [CGI + ngnix 使用demo](./articals/CGI_program/README.md)
 - [x] [TCP IP 网络编程入门](./bookNote/TcpIpProgramingIntro/README.md)
 
 ## 🚦 多线程/并发编程
@@ -32,6 +31,10 @@
 ## 🧰 工具
 
 - [ ] [CMake]()
+
+## 异构计算
+
+- [][Cuda](./articals/cuda/README.md)
 
 ## 🔎 杂谈
 
