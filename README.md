@@ -41,7 +41,7 @@
 - [x] [Cpp 17 standard feature](./articals/cpp_17_standard/README.md)
 - [ ] [move semantics]
 - [ ] [Copy/move elision](./articals/copy_move_elision/README.md)
-- [ ] [访存优化]
+- [x] [访存优化：伪共享与 Cache Line](./articals/false_sharing/README.md)
 - [x] [编译器优化系列](./articals/compile_optimization)
 - [ ] [SMID加速指令](./https://www.bilibili.com/video/BV1GN411B7b2?vd_source=27d3b33a76014ebb5a906ad40fa382de&spm_id_from=333.788.videopod.sections)
 - [x] [CppQuestion](./articals/CppQuestion/README.md)
